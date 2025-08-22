@@ -1,26 +1,37 @@
 import { defineStore } from "pinia";
+import { ref } from "vue";
 
-export interface Entry {
+export interface FormEntry {
   name: string;
   email: string;
-  gender: string;
   birthDate: string;
+  gender: string;
   product: string;
   price: number;
   quantity: number;
   total: number;
 }
 
-export const useFormDataStore = defineStore("formData", {
-  state: () => ({
-    entries: [] as Entry[],
-  }),
-  actions: {
-    addEntry(entry: Entry) {
-      this.entries.push(entry);
-    },
-    deleteEntry(index: number) {
-      this.entries.splice(index, 1);
-    },
-  },
+export const useFormDataStore = defineStore("formData", () => {
+  const entries = ref<FormEntry[]>([]);
+
+  function addEntry(entry: FormEntry) {
+    entries.value.push(entry);
+  }
+
+  function deleteEntry(index: number) {
+    entries.value.splice(index, 1);
+  }
+
+  function clearAll() {
+    entries.value = [];
+  }
+
+  return {
+    entries,
+    addEntry,
+    deleteEntry,
+    clearAll,
+  };
 });
+

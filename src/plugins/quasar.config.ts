@@ -1,5 +1,7 @@
 import type { QuasarPluginOptions } from "quasar";
-import { Dialog, Notify, Loading } from "quasar";
+import { Notify } from "quasar";
+import quasarLang from "quasar/lang/vi";
+import quasarIconSet from "quasar/icon-set/material-icons";
 
 const quasarConfig: QuasarPluginOptions = {
   config: {
@@ -16,9 +18,9 @@ const quasarConfig: QuasarPluginOptions = {
   },
   plugins: {
     Notify,
-    Dialog,
-    Loading,
   },
+  lang: quasarLang,
+  iconSet: quasarIconSet,
 };
 
 export default quasarConfig;

@@ -21,7 +21,7 @@
         <!-- Stepper -->
         <QStepper v-model="step" vertical animated>
           <!-- Step 1: User Info -->
-          <QStep :name="1" title="Thông tin người dùng" icon="person">
+          <QStep :name="1" title="Thông tin người dùng" icon="person"  v-bind="getStepStatus(1)">
             <QCard class="q-pa-md q-mb-md" bordered>
               <QCardSection>
                 <QInput
@@ -54,11 +54,12 @@
                 >
                   <template #append>
                     <QIcon name="event" class="cursor-pointer">
-                      <QPopupProxy>
+                      <QPopupProxy ref="datePopupRef">
                         <QDate
                           v-model="form.birthdate"
                           mask="DD-MM-YYYY"
                           :max="today"
+                          @update:model-value="datePopupRef.hide()"
                         />
                       </QPopupProxy>
                     </QIcon>
@@ -75,28 +76,31 @@
           </QStep>
 
           <!-- Step 2: Product Info -->
-          <QStep :name="2" title="Thông tin sản phẩm" icon="shopping_cart">
+          <QStep :name="2" title="Thông tin sản phẩm" icon="shopping_cart"  v-bind="getStepStatus(2)">
             <QCard class="q-pa-md q-mb-md" bordered>
               <QCardSection>
                 <QSelect
                   v-model="form.product"
                   :options="productOptions"
                   label="Sản phẩm"
+                  emit-value
+                  map-options
                   :disable="!isAuthenticated"
                 />
                 <div v-if="form.product" class="q-mt-sm">
-                  💸 Giá: {{ productPrice }}₫
+                  💸 Giá: {{ formatCurrency(productPrice) }}
                 </div>
 
                 <QInput
                   v-model.number="form.quantity"
                   label="Số lượng"
                   type="number"
+                  :min="1"
                   class="q-mt-md"
                   :disable="!isAuthenticated"
                 />
                 <div v-if="form.quantity && form.product" class="q-mt-sm">
-                  💰 Tổng tiền: {{ totalPrice }}₫
+                  💰 Tổng tiền: {{ formatCurrency(totalPrice) }}
                 </div>
 
                 <div class="row q-col-gutter-sm q-mt-md">
@@ -112,7 +116,7 @@
                   <div class="col">
                     <QBtn
                       label="Tiếp theo"
-                      @click="step = 3"
+                      @click="goNextStep"
                       color="primary"
                       class="full-width"
                     />
@@ -123,7 +127,7 @@
           </QStep>
 
           <!-- Step 3: Confirmation -->
-          <QStep :name="3" title="Xác nhận thông tin" icon="check">
+          <QStep :name="3" title="Xác nhận thông tin" icon="check"  v-bind="getStepStatus(3)">
             <QCard class="q-pa-md q-mb-md" bordered>
               <QCardSection>
                 <div class="q-mb-sm">👤 Tên: {{ form.username }}</div>
@@ -132,7 +136,7 @@
                 <div class="q-mb-sm">🎂 Ngày sinh: {{ form.birthdate }}</div>
                 <div class="q-mb-sm">📦 Sản phẩm: {{ form.product }}</div>
                 <div class="q-mb-sm">🔢 Số lượng: {{ form.quantity }}</div>
-                <div class="q-mb-sm">💰 Tổng tiền: {{ totalPrice }}₫</div>
+                <div class="q-mb-sm">💰 Tổng tiền: {{ formatCurrency(totalPrice) }}</div>
                 <div class="row q-col-gutter-sm q-mt-md">
                   <div class="col">
                     <QBtn
@@ -144,21 +148,26 @@
                     />
                   </div>
                   <div class="col">
-                    <QBtn label="Submit" color="positive" @click="handleSubmit" class="full-width"/>
+                    <QBtn
+                      label="Submit"
+                      color="positive"
+                      @click="handleSubmit"
+                      class="full-width"
+                    />
                   </div>
                 </div>
-                
               </QCardSection>
             </QCard>
           </QStep>
         </QStepper>
+        <DataTable v-if="formDataStore.entries.length > 0" />
       </QPage>
     </QPageContainer>
   </QLayout>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from "vue";
+import { ref, computed, reactive, toRefs, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   QLayout,
@@ -178,26 +187,33 @@ import {
   useQuasar,
 } from "quasar";
 import { useUserStore } from "../stores/userStore";
+import { useFormDataStore } from "../stores/formData";
+import DataTable from "../components/DataTable.vue";
 
 const $q = useQuasar();
 const router = useRouter();
 const userStore = useUserStore();
+  const formDataStore = useFormDataStore()
 
 const isAuthenticated = computed(() => userStore.isAuthenticated);
 const username = computed(() => userStore.username);
 const email = computed(() => userStore.email);
 
 const step = ref(1);
-const today = new Date().toISOString().split("T")[0];
+const datePopupRef = ref();
+const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-')
+const submitted = ref(false)
 
-const form = ref({
+const form = reactive({
   username: username.value || "",
   email: email.value || "",
   gender: "",
-  birthdate: "",
+  birthdate: today,
   product: "",
   quantity: 0,
 });
+
+const { product, quantity } = toRefs(form);
 
 const genderOptions = [
   { label: "Nam", value: "male" },
@@ -216,21 +232,42 @@ const productPrices: Record<string, number> = {
   Headphones: 2000000,
 };
 
-const productPrice = computed(() => productPrices[form.value.product] || 0);
-const totalPrice = computed(() => productPrice.value * form.value.quantity);
+const productPrice = computed(() => productPrices[product.value] || 0);
+const totalPrice = computed(() => productPrice.value * quantity.value);
+
+function getStepStatus(stepIndex: number) {
+  return {
+    done: step.value > stepIndex || (submitted.value === true && stepIndex === 3),
+    active: step.value === stepIndex,
+    disable: step.value < stepIndex
+  }
+}
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString("vi-VN", { style: "currency", currency: "VND" });
+}
 
 function goToLogin() {
   router.push("/login");
 }
 
 function handleSubmit() {
-  userStore.submitForm({
-    ...form.value,
+  const entry = {
+    name: form.username,
+    email: form.email,
+    gender: form.gender,
+    birthDate: form.birthdate, 
+    product: form.product,
     price: productPrice.value,
-    total: totalPrice.value,
-  });
-  $q.notify({ type: "positive", message: "Thông tin đã được lưu!" });
-  step.value = 1;
+    quantity: quantity.value,
+    total: totalPrice.value
+  }
+
+  formDataStore.addEntry(entry)
+
+  userStore.submitForm(entry)
+  submitted.value = true
+  $q.notify({ type: 'positive', message: 'Thông tin đã được lưu!', position:'top' })
 }
 
 function goBackStep() {
@@ -240,8 +277,13 @@ function goBackStep() {
 }
 
 function goNextStep() {
-  if (0<step.value && step.value < 3) {
-    step.value += 1
+  if (step.value > 0 && step.value < 3) {
+    step.value += 1;
   }
 }
+
+watch(product, (val) => {
+  console.log("Sản phẩm đã chọn:", val);
+  console.log("Giá tương ứng:", productPrices[val]);
+});
 </script>
